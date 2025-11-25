@@ -1,0 +1,10 @@
+{
+  "name": "realtime-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@vercel/node": "^3.0.0",
+    "ws": "^8.17.0"
+  }
+}

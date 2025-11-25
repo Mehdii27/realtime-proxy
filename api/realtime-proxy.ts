@@ -1,45 +1,33 @@
-import { WebSocket } from "ws";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import WebSocket from "ws";
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.headers.upgrade !== "websocket") {
-    res.status(400).send("Expected WebSocket");
-    return;
+export default function handler(req: VercelRequest, res: VercelResponse) {
+  if (
+    !req.headers.upgrade ||
+    req.headers.upgrade.toLowerCase() !== "websocket"
+  ) {
+    return res.status(400).send("Expected WebSocket upgrade");
   }
 
-  const upgrade = (res as any).socket.server;
-  const clientSocket = (res as any).socket;
-
-  upgrade.on("upgrade", async (request: any, socket: any, head: any) => {
-    // 1. Créer une session OpenAI Realtime
-    const sessionRes = await fetch("https://api.openai.com/v1/realtime/sessions", {
-      method: "POST",
+  const upstream = new WebSocket(
+    "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17",
+    {
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "OpenAI-Beta": "realtime=v1",
       },
-    });
+    },
+  );
 
-    const session = await sessionRes.json();
-    const wsUrl = session.websocket_url;
+  // @ts-ignore
+  const client = new WebSocket(req);
 
-    // 2. Ouvrir un WebSocket vers OpenAI
-    const openaiWs = new WebSocket(wsUrl, {
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "OpenAI-Beta": "realtime=v1",
-      },
-    });
+  upstream.on("open", () => console.log("[Proxy] Connected to OpenAI"));
+  upstream.on("message", (msg) => client.send(msg));
+  upstream.on("close", () => client.close());
+  upstream.on("error", (err) => console.error("[Upstream error]", err));
 
-    // 3. Accepter le WS du client
-    const clientWs = new WebSocket(null);
-    (clientWs as any)._socket = socket;
-
-    // 4. Relai bidirectionnel
-    clientWs.on("message", (msg) => openaiWs.send(msg));
-    openaiWs.on("message", (msg) => clientWs.send(msg));
-
-    clientWs.on("close", () => openaiWs.close());
-    openaiWs.on("close", () => clientWs.close());
-  });
+  client.on("message", (msg) => upstream.send(msg));
+  client.on("close", () => upstream.close());
+  client.on("error", (err) => console.error("[Client error]", err));
 }
