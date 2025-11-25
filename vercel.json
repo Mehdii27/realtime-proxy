@@ -2,8 +2,7 @@
   "functions": {
     "api/realtime-proxy.ts": {
       "runtime": "nodejs20.x",
-      "maxDuration": 300,
-      "supportsResponseStreaming": true
+      "maxDuration": 300
     }
   }
 }
